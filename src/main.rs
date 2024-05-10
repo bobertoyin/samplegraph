@@ -18,14 +18,12 @@ use http::StatusCode;
 use log::info;
 use megamind::{models::RelationshipType, ClientBuilder};
 use petgraph::prelude::DiGraphMap;
-use redis::Client as RedisClient;
 use tokio::{
-    sync::Semaphore,
     task::spawn,
     time::{sleep, Duration},
 };
 
-use server::*;
+use samplegraph::*;
 
 async fn build_graph(
     state: Arc<AppState>,
@@ -58,45 +56,45 @@ async fn build_graph(
 
             for task_result in completed_tasks {
                 let (result, degree) = task_result.map_err(ErrIntermediate::from)?;
-                let response = result?;
-                if !graph.contains_node(response.song.core.essential.id) {
-                    graph.add_node(response.song.core.essential.id);
+                let song = result?;
+                if !graph.contains_node(song.core.essential.id) {
+                    graph.add_node(song.core.essential.id);
                     songs.insert(
-                        response.song.core.essential.id.to_string(),
+                        song.core.essential.id.to_string(),
                         SongInfo {
-                            full_title: response.song.core.full_title,
-                            url: response.song.core.essential.url,
+                            full_title: song.core.full_title,
+                            url: song.core.essential.url,
                             degree,
-                            thumbnail: response.song.core.song_art_image_thumbnail_url,
+                            thumbnail: song.core.song_art_image_thumbnail_url,
                         },
                     );
                 }
 
                 if degree < max_degree {
-                    for relationship in response.song.song_relationships {
+                    for relationship in song.song_relationships {
                         if relationship.relationship_type != RelationshipType::TranslationOf
                             && relationship.relationship_type != RelationshipType::Translations
                         {
-                            for song in relationship.songs {
-                                if !graph.contains_node(song.core.essential.id) {
+                            for next_song in relationship.songs {
+                                if !graph.contains_node(next_song.core.essential.id) {
                                     search_queue.push_back((song.core.essential.id, degree + 1));
-                                    graph.add_node(response.song.core.essential.id);
+                                    graph.add_node(song.core.essential.id);
                                     songs.insert(
-                                        song.core.essential.id.to_string(),
+                                        next_song.core.essential.id.to_string(),
                                         SongInfo {
-                                            full_title: song.core.full_title,
-                                            url: song.core.essential.url,
+                                            full_title: next_song.core.full_title,
+                                            url: next_song.core.essential.url,
                                             degree: degree + 1,
-                                            thumbnail: song.core.song_art_image_thumbnail_url,
+                                            thumbnail: next_song.core.song_art_image_thumbnail_url,
                                         },
                                     );
                                     if !graph.contains_edge(
-                                        response.song.core.essential.id,
                                         song.core.essential.id,
+                                        next_song.core.essential.id,
                                     ) {
                                         graph.add_edge(
-                                            response.song.core.essential.id,
                                             song.core.essential.id,
+                                            next_song.core.essential.id,
                                             relationship.relationship_type,
                                         );
                                     }
@@ -162,23 +160,15 @@ async fn main() {
             .auth_token(var("GENIUS_TOKEN").expect("missing Genius token"))
             .build()
             .expect("failed to create Genius client");
-        let redis = RedisClient::open(var("REDIS_URL").expect("missing Redis URL"))
-            .expect("failed to create Redis client");
-        let semaphore = Semaphore::new(4096);
-        let state = AppState {
-            megamind,
-            redis,
-            semaphore,
-            max_retries: 10,
-        };
+        let state = AppState::new(megamind, 4096, 10);
         let api_service = scope("/api")
             .service(get_version)
             .service(get_graph)
             .service(get_search);
         let spa_service = spa()
-            .index_file("../client/build/index.html")
+            .index_file("./client/build/index.html")
             .static_resources_mount("/")
-            .static_resources_location("../client/build")
+            .static_resources_location("./client/build")
             .finish();
         App::new()
             .app_data(Data::new(state))

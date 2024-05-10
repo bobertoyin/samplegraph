@@ -1,6 +1,7 @@
 FROM rust:latest as rust-build
-WORKDIR /usr/server
-COPY server .
+WORKDIR /usr/samplegraph
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src/
 RUN cargo build --release
 
 FROM node:20 as node-build
@@ -14,6 +15,6 @@ RUN apt-get update && apt-get install -y ca-certificates tzdata && rm -rf /var/l
 RUN ulimit -n 4096
 WORKDIR /usr/client
 COPY --from=node-build /usr/client/build ./build
-WORKDIR /usr/server
-COPY --from=rust-build /usr/server/target/release/server .
-CMD ["./server"]
+WORKDIR /usr
+COPY --from=rust-build /usr/samplegraph/target/release/samplegraph .
+CMD ["./samplegraph"]

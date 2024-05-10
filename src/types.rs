@@ -1,15 +1,16 @@
-use std::{collections::HashMap, io::Error as IoError};
+use std::{collections::HashMap, io::Error as IoError, time::Duration};
 
 use http::StatusCode;
 use megamind::{
     models::{
-        search::{Hit, SearchResponse as MegamindSearchResponse},
+        search::Hit,
         song::RelationshipType,
+        Song,
     },
     Client as MegamindClient, ClientError,
 };
+use moka::future::{Cache, CacheBuilder};
 use petgraph::prelude::DiGraphMap;
-use redis::{Client as RedisClient, RedisError};
 use serde::{Deserialize, Serialize};
 use serde_json::Error as JsonError;
 use tokio::{sync::Semaphore, task::JoinError};
@@ -17,9 +18,73 @@ use ts_rs::TS;
 
 pub struct AppState {
     pub megamind: MegamindClient,
-    pub redis: RedisClient,
     pub semaphore: Semaphore,
     pub max_retries: u32,
+    song_cache: Cache<u32, Song>,
+    search_cache: Cache<String, Vec<Hit>>,
+}
+
+impl AppState {
+    pub fn new(
+        megamind: MegamindClient,
+        semaphore_permits: usize,
+        max_retries: u32,
+    ) -> AppState {
+        let semaphore = Semaphore::new(semaphore_permits);
+        let song_cache = CacheBuilder::default()
+            .time_to_live(Duration::from_secs(10 * 60))
+            .max_capacity(10_000)
+            .build();
+        let search_cache = CacheBuilder::default()
+            .time_to_live(Duration::from_secs(30))
+            .max_capacity(1_000)
+            .build();
+        Self {
+            megamind,
+            semaphore,
+            max_retries,
+            song_cache,
+            search_cache,
+        }
+    }
+
+    pub async fn song(&self, id: u32) -> Result<Song, ErrIntermediate> {
+        let song = self.song_cache.get(&id).await;
+        match song {
+            Some(result) => Ok(result),
+            None => {
+                let result = self.megamind.song(id).await?;
+                match result {
+                    megamind::models::Response::Success { meta: _, response } => {
+                        let song = response.song;
+                        self.song_cache.insert(id, song.clone()).await;
+                        Ok(song)
+                    },
+                    megamind::models::Response::Error { meta, response } => todo!(),
+                    megamind::models::Response::Other { error, error_description } => todo!(),
+                }
+            },
+        }
+    }
+
+    pub async fn search(&self, query: &str) -> Result<Vec<Hit>, ErrIntermediate> {
+        let hits = self.search_cache.get(query).await;
+        match hits {
+            Some(result) => Ok(result),
+            None => {
+                let result = self.megamind.search(query).await?;
+                match result {
+                    megamind::models::Response::Success { meta: _, response } => {
+                        let hits = response.hits;
+                        self.search_cache.insert(query.to_string(), hits.clone()).await;
+                        Ok(hits)
+                    },
+                    megamind::models::Response::Error { meta, response } => todo!(),
+                    megamind::models::Response::Other { error, error_description } => todo!(),
+                }
+            }
+        }
+    }
 }
 
 pub struct ErrIntermediate {
@@ -33,15 +98,6 @@ impl ErrIntermediate {
             reason: reason.into(),
             status,
         }
-    }
-}
-
-impl From<RedisError> for ErrIntermediate {
-    fn from(value: RedisError) -> Self {
-        Self::new(
-            format!("redis error: {}", value),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        )
     }
 }
 
@@ -93,7 +149,7 @@ impl From<ErrIntermediate> for (String, StatusCode) {
 }
 
 #[derive(Serialize, TS)]
-#[ts(export, export_to = "../client/src/bindings/SongInfo.d.ts")]
+#[ts(export, export_to = "./client/src/bindings/SongInfo.d.ts")]
 pub struct SongInfo {
     pub full_title: String,
     pub url: String,
@@ -102,7 +158,7 @@ pub struct SongInfo {
 }
 
 #[derive(Serialize, TS)]
-#[ts(export, export_to = "../client/src/bindings/GraphResponse.d.ts")]
+#[ts(export, export_to = "./client/src/bindings/GraphResponse.d.ts")]
 pub struct GraphResponse {
     #[ts(type = "{ nodes: Array<number>, edges: Array<[number, number, string]> }")]
     pub graph: DiGraphMap<u32, RelationshipType>,
@@ -110,16 +166,15 @@ pub struct GraphResponse {
 }
 
 #[derive(Serialize, TS)]
-#[ts(export, export_to = "../client/src/bindings/SearchResponse.d.ts")]
+#[ts(export, export_to = "./client/src/bindings/SearchResponse.d.ts")]
 pub struct SearchResponse {
     pub hits: Vec<SearchHit>,
 }
 
-impl From<MegamindSearchResponse> for SearchResponse {
-    fn from(value: MegamindSearchResponse) -> Self {
+impl From<Vec<Hit>> for SearchResponse {
+    fn from(value: Vec<Hit>) -> Self {
         Self {
             hits: value
-                .hits
                 .into_iter()
                 .map(|hit| match hit {
                     Hit::Song(song) => SearchHit {
@@ -133,7 +188,7 @@ impl From<MegamindSearchResponse> for SearchResponse {
 }
 
 #[derive(Serialize, TS)]
-#[ts(export, export_to = "../client/src/bindings/SearchHit.d.ts")]
+#[ts(export, export_to = "./client/src/bindings/SearchHit.d.ts")]
 pub struct SearchHit {
     pub full_title: String,
     pub id: u32,
