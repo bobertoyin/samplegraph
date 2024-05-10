@@ -93,7 +93,7 @@ impl From<ErrIntermediate> for (String, StatusCode) {
 }
 
 #[derive(Serialize, TS)]
-#[ts(export, export_to = "../client/src/bindings/SongInfo.d.ts")]
+#[ts(export, export_to = "./client/src/bindings/SongInfo.d.ts")]
 pub struct SongInfo {
     pub full_title: String,
     pub url: String,
@@ -102,7 +102,7 @@ pub struct SongInfo {
 }
 
 #[derive(Serialize, TS)]
-#[ts(export, export_to = "../client/src/bindings/GraphResponse.d.ts")]
+#[ts(export, export_to = "./client/src/bindings/GraphResponse.d.ts")]
 pub struct GraphResponse {
     #[ts(type = "{ nodes: Array<number>, edges: Array<[number, number, string]> }")]
     pub graph: DiGraphMap<u32, RelationshipType>,
@@ -110,7 +110,7 @@ pub struct GraphResponse {
 }
 
 #[derive(Serialize, TS)]
-#[ts(export, export_to = "../client/src/bindings/SearchResponse.d.ts")]
+#[ts(export, export_to = "./client/src/bindings/SearchResponse.d.ts")]
 pub struct SearchResponse {
     pub hits: Vec<SearchHit>,
 }
@@ -133,7 +133,7 @@ impl From<MegamindSearchResponse> for SearchResponse {
 }
 
 #[derive(Serialize, TS)]
-#[ts(export, export_to = "../client/src/bindings/SearchHit.d.ts")]
+#[ts(export, export_to = "./client/src/bindings/SearchHit.d.ts")]
 pub struct SearchHit {
     pub full_title: String,
     pub id: u32,

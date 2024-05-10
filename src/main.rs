@@ -25,7 +25,7 @@ use tokio::{
     time::{sleep, Duration},
 };
 
-use server::*;
+use samplegraph::*;
 
 async fn build_graph(
     state: Arc<AppState>,
@@ -176,9 +176,9 @@ async fn main() {
             .service(get_graph)
             .service(get_search);
         let spa_service = spa()
-            .index_file("../client/build/index.html")
+            .index_file("./client/build/index.html")
             .static_resources_mount("/")
-            .static_resources_location("../client/build")
+            .static_resources_location("./client/build")
             .finish();
         App::new()
             .app_data(Data::new(state))
