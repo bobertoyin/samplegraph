@@ -9,12 +9,11 @@ use actix_web::{
     get,
     middleware::{Compress as CompressMW, Logger},
     web::{scope, Data, Json, Path, Query},
-    App, Either, HttpServer, Responder,
+    App, HttpServer, Responder,
 };
 use actix_web_lab::web::spa;
 use env_logger::init as init_logger;
 use futures::future::join_all;
-use http::StatusCode;
 use log::info;
 use megamind::{models::RelationshipType, ClientBuilder};
 use petgraph::prelude::DiGraphMap;
@@ -23,13 +22,13 @@ use tokio::{
     time::{sleep, Duration},
 };
 
-use samplegraph::*;
+use samplegraph::{error::Error, types::*};
 
 async fn build_graph(
     state: Arc<AppState>,
     start_id: u32,
     max_degree: u8,
-) -> Result<GraphResponse, (String, StatusCode)> {
+) -> Result<GraphResponse, Error> {
     let max_tasks: usize = 128;
     let mut retries = 0;
     let mut graph = DiGraphMap::new();
@@ -55,7 +54,7 @@ async fn build_graph(
             .await;
 
             for task_result in completed_tasks {
-                let (result, degree) = task_result.map_err(ErrIntermediate::from)?;
+                let (result, degree) = task_result?;
                 let song = result?;
                 if !graph.contains_node(song.core.essential.id) {
                     graph.add_node(song.core.essential.id);
@@ -112,10 +111,7 @@ async fn build_graph(
     }
 
     if retries >= state.max_retries {
-        return Err((
-            String::from("server resources exhausted"),
-            StatusCode::SERVICE_UNAVAILABLE,
-        ));
+        return Err(Error::ResourcesExhausted);
     }
 
     Ok(GraphResponse { graph, songs })
@@ -131,12 +127,12 @@ async fn get_graph(
     path: Path<u32>,
     query: Query<GraphQuery>,
     data: Data<AppState>,
-) -> Either<(Json<GraphResponse>, StatusCode), (String, StatusCode)> {
+) -> Result<Json<GraphResponse>, Error> {
     let song_id = path.into_inner();
     let max_degree = query.degree.unwrap_or(3);
     match build_graph(data.into_inner(), song_id, max_degree).await {
-        Ok(graph) => Either::Left((Json(graph), StatusCode::OK)),
-        Err(error) => Either::Right(error),
+        Ok(graph) => Ok(Json(graph)),
+        Err(error) => Err(error),
     }
 }
 
@@ -144,10 +140,10 @@ async fn get_graph(
 async fn get_search(
     query: Query<SearchQuery>,
     data: Data<AppState>,
-) -> Either<(Json<SearchResponse>, StatusCode), (String, StatusCode)> {
+) -> Result<Json<SearchResponse>, Error> {
     match data.search(query.query.as_ref()).await {
-        Ok(hits) => Either::Left((Json(hits.into()), StatusCode::OK)),
-        Err(error) => Either::Right(error.into()),
+        Ok(hits) => Ok(Json(hits.into())),
+        Err(error) => Err(error),
     }
 }
 

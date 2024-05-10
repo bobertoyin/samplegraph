@@ -1,20 +1,16 @@
-use std::{collections::HashMap, io::Error as IoError, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
-use http::StatusCode;
 use megamind::{
-    models::{
-        search::Hit,
-        song::RelationshipType,
-        Song,
-    },
-    Client as MegamindClient, ClientError,
+    models::{search::Hit, song::RelationshipType, Song},
+    Client as MegamindClient,
 };
 use moka::future::{Cache, CacheBuilder};
 use petgraph::prelude::DiGraphMap;
 use serde::{Deserialize, Serialize};
-use serde_json::Error as JsonError;
-use tokio::{sync::Semaphore, task::JoinError};
+use tokio::sync::Semaphore;
 use ts_rs::TS;
+
+use crate::error::Error;
 
 pub struct AppState {
     pub megamind: MegamindClient,
@@ -25,11 +21,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(
-        megamind: MegamindClient,
-        semaphore_permits: usize,
-        max_retries: u32,
-    ) -> AppState {
+    pub fn new(megamind: MegamindClient, semaphore_permits: usize, max_retries: u32) -> AppState {
         let semaphore = Semaphore::new(semaphore_permits);
         let song_cache = CacheBuilder::default()
             .time_to_live(Duration::from_secs(10 * 60))
@@ -48,103 +40,26 @@ impl AppState {
         }
     }
 
-    pub async fn song(&self, id: u32) -> Result<Song, ErrIntermediate> {
+    pub async fn song(&self, id: u32) -> Result<Song, Error> {
         let song = self.song_cache.get(&id).await;
         match song {
             Some(result) => Ok(result),
             None => {
                 let result = self.megamind.song(id).await?;
-                match result {
-                    megamind::models::Response::Success { meta: _, response } => {
-                        let song = response.song;
-                        self.song_cache.insert(id, song.clone()).await;
-                        Ok(song)
-                    },
-                    megamind::models::Response::Error { meta, response } => todo!(),
-                    megamind::models::Response::Other { error, error_description } => todo!(),
-                }
-            },
+                Error::from_genius_response(result).map(|response| response.song)
+            }
         }
     }
 
-    pub async fn search(&self, query: &str) -> Result<Vec<Hit>, ErrIntermediate> {
+    pub async fn search(&self, query: &str) -> Result<Vec<Hit>, Error> {
         let hits = self.search_cache.get(query).await;
         match hits {
             Some(result) => Ok(result),
             None => {
                 let result = self.megamind.search(query).await?;
-                match result {
-                    megamind::models::Response::Success { meta: _, response } => {
-                        let hits = response.hits;
-                        self.search_cache.insert(query.to_string(), hits.clone()).await;
-                        Ok(hits)
-                    },
-                    megamind::models::Response::Error { meta, response } => todo!(),
-                    megamind::models::Response::Other { error, error_description } => todo!(),
-                }
+                Error::from_genius_response(result).map(|response| response.hits)
             }
         }
-    }
-}
-
-pub struct ErrIntermediate {
-    reason: String,
-    status: StatusCode,
-}
-
-impl ErrIntermediate {
-    pub fn new<S: Into<String>>(reason: S, status: StatusCode) -> Self {
-        Self {
-            reason: reason.into(),
-            status,
-        }
-    }
-}
-
-impl From<ClientError> for ErrIntermediate {
-    fn from(value: ClientError) -> Self {
-        match value {
-            ClientError::General(inner) => Self::new(
-                inner.to_string(),
-                inner.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-            ),
-            ClientError::RateLimited => {
-                Self::new("rate limited by Genius", StatusCode::TOO_MANY_REQUESTS)
-            }
-        }
-    }
-}
-
-impl From<JsonError> for ErrIntermediate {
-    fn from(value: JsonError) -> Self {
-        Self::new(
-            format!("serde json error: {}", value),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        )
-    }
-}
-
-impl From<IoError> for ErrIntermediate {
-    fn from(value: IoError) -> Self {
-        Self::new(
-            format!("IO error: {}", value),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        )
-    }
-}
-
-impl From<JoinError> for ErrIntermediate {
-    fn from(value: JoinError) -> Self {
-        Self::new(
-            format!("join error: {}", value),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        )
-    }
-}
-
-impl From<ErrIntermediate> for (String, StatusCode) {
-    fn from(value: ErrIntermediate) -> Self {
-        (value.reason, value.status)
     }
 }
 
