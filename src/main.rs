@@ -22,7 +22,7 @@ use tokio::{
     time::{sleep, Duration},
 };
 
-use samplegraph::{error::Error, types::*};
+use samplegraph::{error::Error, state::AppState, types::*};
 
 async fn build_graph(
     state: Arc<AppState>,
