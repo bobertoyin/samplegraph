@@ -42,8 +42,9 @@ impl AppState {
         match song {
             Some(result) => Ok(result),
             None => {
-                let result = self.megamind.song(id).await?;
-                Error::from_genius_response(result).map(|response| response.song)
+                let song = Error::from_genius_response(self.megamind.song(id).await?)?.song;
+                self.song_cache.insert(id, song.clone()).await;
+                Ok(song)
             }
         }
     }
@@ -53,8 +54,9 @@ impl AppState {
         match hits {
             Some(result) => Ok(result),
             None => {
-                let result = self.megamind.search(query).await?;
-                Error::from_genius_response(result).map(|response| response.hits)
+                let hits = Error::from_genius_response(self.megamind.search(query).await?)?.hits;
+                self.search_cache.insert(query.to_string(), hits.clone()).await;
+                Ok(hits)
             }
         }
     }
