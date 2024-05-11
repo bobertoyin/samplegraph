@@ -1,9 +1,4 @@
-use std::{
-    cmp::min,
-    collections::{HashMap, VecDeque},
-    env::var,
-    sync::Arc,
-};
+use std::env::var;
 
 use actix_web::{
     get,
@@ -13,113 +8,14 @@ use actix_web::{
 };
 use actix_web_lab::web::spa;
 use env_logger::init as init_logger;
-use futures::future::join_all;
-use log::info;
-use megamind::{models::RelationshipType, ClientBuilder};
-use petgraph::prelude::DiGraphMap;
-use tokio::{
-    task::spawn,
-    time::{sleep, Duration},
-};
+use megamind::ClientBuilder;
 
 use samplegraph::{
     error::Error,
-    state::{AppState, GraphQuery, SearchQuery},
+    graph::build_graph,
+    state::{AppState, SearchQuery},
     types::*,
 };
-
-async fn build_graph(
-    state: Arc<AppState>,
-    start_id: u32,
-    max_degree: u8,
-) -> Result<GraphResponse, Error> {
-    let max_tasks: usize = 128;
-    let mut retries = 0;
-    let mut graph = DiGraphMap::new();
-    let mut songs = HashMap::new();
-    let mut search_queue = VecDeque::new();
-
-    search_queue.push_back((start_id, 1));
-
-    let state_ref = state.as_ref();
-
-    while !search_queue.is_empty() && retries < state_ref.max_retries {
-        let permit = state.semaphore.try_acquire_many(max_tasks as u32);
-        if permit.is_ok() {
-            let amount = min(search_queue.len(), max_tasks);
-            let next_tasks = search_queue
-                .drain(0..amount)
-                .filter(|item| item.1 <= max_degree);
-
-            let completed_tasks = join_all(next_tasks.into_iter().map(|(id, degree)| {
-                let state_clone = state.clone();
-                spawn(async move { (state_clone.song(id).await, degree) })
-            }))
-            .await;
-
-            for task_result in completed_tasks {
-                let (result, degree) = task_result?;
-                let song = result?;
-                if !graph.contains_node(song.core.essential.id) {
-                    graph.add_node(song.core.essential.id);
-                    songs.insert(
-                        song.core.essential.id,
-                        SongInfo {
-                            full_title: song.core.full_title,
-                            url: song.core.essential.url,
-                            degree,
-                            thumbnail: song.core.song_art_image_thumbnail_url,
-                        },
-                    );
-                }
-
-                if degree < max_degree {
-                    for relationship in song.song_relationships {
-                        if relationship.relationship_type != RelationshipType::TranslationOf
-                            && relationship.relationship_type != RelationshipType::Translations
-                        {
-                            for next_song in relationship.songs {
-                                if !graph.contains_node(next_song.core.essential.id) {
-                                    search_queue.push_back((song.core.essential.id, degree + 1));
-                                    graph.add_node(song.core.essential.id);
-                                    songs.insert(
-                                        next_song.core.essential.id,
-                                        SongInfo {
-                                            full_title: next_song.core.full_title,
-                                            url: next_song.core.essential.url,
-                                            degree: degree + 1,
-                                            thumbnail: next_song.core.song_art_image_thumbnail_url,
-                                        },
-                                    );
-                                    if !graph.contains_edge(
-                                        song.core.essential.id,
-                                        next_song.core.essential.id,
-                                    ) {
-                                        graph.add_edge(
-                                            song.core.essential.id,
-                                            next_song.core.essential.id,
-                                            relationship.relationship_type,
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            sleep(Duration::from_secs(2)).await;
-            info!("failed to get semaphore permit, waiting to retry...");
-            retries += 1;
-        }
-    }
-
-    if retries >= state.max_retries {
-        return Err(Error::ResourcesExhausted);
-    }
-
-    Ok(GraphResponse { graph, songs })
-}
 
 #[get("/version")]
 async fn get_version() -> impl Responder {
@@ -129,12 +25,10 @@ async fn get_version() -> impl Responder {
 #[get("/graph/{song_id}")]
 async fn get_graph(
     path: Path<u32>,
-    query: Query<GraphQuery>,
     data: Data<AppState>,
 ) -> Result<Json<GraphResponse>, Error> {
-    let song_id = path.into_inner();
-    let max_degree = query.degree.unwrap_or(3);
-    match build_graph(data.into_inner(), song_id, max_degree).await {
+    let root = path.into_inner();
+    match build_graph(data.into_inner(), root, 2).await {
         Ok(graph) => Ok(Json(graph)),
         Err(error) => Err(error),
     }
@@ -160,7 +54,7 @@ async fn main() {
             .auth_token(var("GENIUS_TOKEN").expect("missing Genius token"))
             .build()
             .expect("failed to create Genius client");
-        let state = AppState::new(megamind, 4096, 10);
+        let state = AppState::new(megamind);
         let api_service = scope("/api")
             .service(get_version)
             .service(get_graph)
