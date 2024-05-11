@@ -36,13 +36,12 @@ export default function Graph(): React.ReactElement {
         layoutGraph.setGraph({ rankdir: "TB" });
 
         let nodes = response.graph.nodes.map((node) => {
-          const id = String(node);
           return {
-            id: id,
+            id: String(node),
             data: {
               label: (
-                <a href={response.songs[id].url} target="_blank">
-                  {response.songs[id].full_title}
+                <a href={response.songs[node].url} target="_blank">
+                  {response.songs[node].full_title}
                 </a>
               ),
             },

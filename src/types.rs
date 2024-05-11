@@ -2,8 +2,16 @@ use std::collections::HashMap;
 
 use megamind::models::{search::Hit, song::RelationshipType};
 use petgraph::prelude::DiGraphMap;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use ts_rs::TS;
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "./client/src/bindings/GraphResponse.d.ts")]
+pub struct GraphResponse {
+    #[ts(type = "{ nodes: Array<number>, edges: Array<[number, number, string]> }")]
+    pub graph: DiGraphMap<u32, RelationshipType>,
+    pub songs: HashMap<u32, SongInfo>,
+}
 
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "./client/src/bindings/SongInfo.d.ts")]
@@ -15,14 +23,6 @@ pub struct SongInfo {
 }
 
 #[derive(Serialize, TS)]
-#[ts(export, export_to = "./client/src/bindings/GraphResponse.d.ts")]
-pub struct GraphResponse {
-    #[ts(type = "{ nodes: Array<number>, edges: Array<[number, number, string]> }")]
-    pub graph: DiGraphMap<u32, RelationshipType>,
-    pub songs: HashMap<String, SongInfo>,
-}
-
-#[derive(Serialize, TS)]
 #[ts(export, export_to = "./client/src/bindings/SearchResponse.d.ts")]
 pub struct SearchResponse {
     pub hits: Vec<SearchHit>,
@@ -31,15 +31,7 @@ pub struct SearchResponse {
 impl From<Vec<Hit>> for SearchResponse {
     fn from(value: Vec<Hit>) -> Self {
         Self {
-            hits: value
-                .into_iter()
-                .map(|hit| match hit {
-                    Hit::Song(song) => SearchHit {
-                        full_title: song.result.core.full_title,
-                        id: song.result.core.essential.id,
-                    },
-                })
-                .collect(),
+            hits: value.into_iter().map(SearchHit::from).collect(),
         }
     }
 }
@@ -51,12 +43,13 @@ pub struct SearchHit {
     pub id: u32,
 }
 
-#[derive(Deserialize)]
-pub struct GraphQuery {
-    pub degree: Option<u8>,
-}
-
-#[derive(Deserialize)]
-pub struct SearchQuery {
-    pub query: String,
+impl From<Hit> for SearchHit {
+    fn from(value: Hit) -> Self {
+        match value {
+            Hit::Song(song) => Self {
+                full_title: song.result.core.full_title,
+                id: song.result.core.essential.id,
+            },
+        }
+    }
 }
