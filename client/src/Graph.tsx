@@ -8,7 +8,7 @@ import "reactflow/dist/style.css";
 import { GraphResponse } from "./bindings/GraphResponse";
 
 async function get_graph(id: number): Promise<GraphResponse> {
-  const response = await fetch(`/api/graph/${id}?degree=3`);
+  const response = await fetch(`/api/graph/${id}`);
   if (!response.ok) {
     throw new Error(await response.text());
   }

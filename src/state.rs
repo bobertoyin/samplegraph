@@ -6,21 +6,17 @@ use megamind::{
 };
 use moka::future::{Cache, CacheBuilder};
 use serde::Deserialize;
-use tokio::sync::Semaphore;
 
 use crate::error::Error;
 
 pub struct AppState {
     pub megamind: MegamindClient,
-    pub semaphore: Semaphore,
-    pub max_retries: u32,
     song_cache: Cache<u32, Song>,
     search_cache: Cache<String, Vec<Hit>>,
 }
 
 impl AppState {
-    pub fn new(megamind: MegamindClient, semaphore_permits: usize, max_retries: u32) -> AppState {
-        let semaphore = Semaphore::new(semaphore_permits);
+    pub fn new(megamind: MegamindClient) -> AppState {
         let song_cache = CacheBuilder::default()
             .time_to_live(Duration::from_secs(10 * 60))
             .max_capacity(10_000)
@@ -31,8 +27,6 @@ impl AppState {
             .build();
         Self {
             megamind,
-            semaphore,
-            max_retries,
             song_cache,
             search_cache,
         }
@@ -63,11 +57,6 @@ impl AppState {
             }
         }
     }
-}
-
-#[derive(Deserialize)]
-pub struct GraphQuery {
-    pub degree: Option<u8>,
 }
 
 #[derive(Deserialize)]
