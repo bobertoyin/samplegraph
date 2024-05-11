@@ -5,6 +5,7 @@ use megamind::{
     Client as MegamindClient,
 };
 use moka::future::{Cache, CacheBuilder};
+use serde::Deserialize;
 use tokio::sync::Semaphore;
 
 use crate::error::Error;
@@ -55,9 +56,21 @@ impl AppState {
             Some(result) => Ok(result),
             None => {
                 let hits = Error::from_genius_response(self.megamind.search(query).await?)?.hits;
-                self.search_cache.insert(query.to_string(), hits.clone()).await;
+                self.search_cache
+                    .insert(query.to_string(), hits.clone())
+                    .await;
                 Ok(hits)
             }
         }
     }
+}
+
+#[derive(Deserialize)]
+pub struct GraphQuery {
+    pub degree: Option<u8>,
+}
+
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    pub query: String,
 }

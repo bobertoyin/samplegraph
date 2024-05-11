@@ -22,7 +22,11 @@ use tokio::{
     time::{sleep, Duration},
 };
 
-use samplegraph::{error::Error, state::AppState, types::*};
+use samplegraph::{
+    error::Error,
+    state::{AppState, GraphQuery, SearchQuery},
+    types::*,
+};
 
 async fn build_graph(
     state: Arc<AppState>,
@@ -59,7 +63,7 @@ async fn build_graph(
                 if !graph.contains_node(song.core.essential.id) {
                     graph.add_node(song.core.essential.id);
                     songs.insert(
-                        song.core.essential.id.to_string(),
+                        song.core.essential.id,
                         SongInfo {
                             full_title: song.core.full_title,
                             url: song.core.essential.url,
@@ -79,7 +83,7 @@ async fn build_graph(
                                     search_queue.push_back((song.core.essential.id, degree + 1));
                                     graph.add_node(song.core.essential.id);
                                     songs.insert(
-                                        next_song.core.essential.id.to_string(),
+                                        next_song.core.essential.id,
                                         SongInfo {
                                             full_title: next_song.core.full_title,
                                             url: next_song.core.essential.url,
