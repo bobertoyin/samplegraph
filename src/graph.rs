@@ -13,26 +13,9 @@ const MAX_CONCURRENT: usize = 100;
 
 use crate::{error::Error, state::AppState, GraphResponse, SongInfo};
 
-fn invert(relationship: RelationshipType) -> RelationshipType {
-    match relationship {
-        RelationshipType::Samples => RelationshipType::SampledIn,
-        RelationshipType::SampledIn => RelationshipType::Samples,
-        RelationshipType::Interpolates => RelationshipType::InterpolatedBy,
-        RelationshipType::InterpolatedBy => RelationshipType::Interpolates,
-        RelationshipType::CoverOf => RelationshipType::CoveredBy,
-        RelationshipType::CoveredBy => RelationshipType::CoverOf,
-        RelationshipType::RemixOf => RelationshipType::RemixedBy,
-        RelationshipType::RemixedBy => RelationshipType::RemixOf,
-        RelationshipType::LiveVersionOf => RelationshipType::PerformedLiveAs,
-        RelationshipType::PerformedLiveAs => RelationshipType::LiveVersionOf,
-        RelationshipType::TranslationOf => RelationshipType::Translations,
-        RelationshipType::Translations => RelationshipType::TranslationOf,
-        RelationshipType::Unknown => RelationshipType::Unknown,
-    }
-}
-
 fn is_translation(relationship: RelationshipType) -> bool {
-    relationship == RelationshipType::TranslationOf || relationship == RelationshipType::Translations
+    relationship == RelationshipType::TranslationOf
+        || relationship == RelationshipType::Translations
 }
 
 pub async fn build_graph(
@@ -81,7 +64,6 @@ pub async fn build_graph(
                 for relationship in song.song_relationships {
                     if !is_translation(relationship.relationship_type) {
                         for neighbor in relationship.songs {
-
                             if !graph.contains_node(neighbor.core.essential.id) {
                                 graph.add_node(neighbor.core.essential.id);
                                 songs.insert(
@@ -96,20 +78,25 @@ pub async fn build_graph(
                                 horizon.push_back((neighbor.core.essential.id, degree + 1));
                             }
 
-                            if !graph.contains_edge(song.core.essential.id, neighbor.core.essential.id) {
-                                graph.add_edge(song.core.essential.id, neighbor.core.essential.id, relationship.relationship_type);
+                            if !graph
+                                .contains_edge(song.core.essential.id, neighbor.core.essential.id)
+                                && !graph.contains_edge(
+                                    neighbor.core.essential.id,
+                                    song.core.essential.id,
+                                )
+                            {
+                                graph.add_edge(
+                                    song.core.essential.id,
+                                    neighbor.core.essential.id,
+                                    relationship.relationship_type,
+                                );
                             }
-
-                            if !graph.contains_edge(neighbor.core.essential.id, song.core.essential.id) {
-                                graph.add_edge(neighbor.core.essential.id, song.core.essential.id, invert(relationship.relationship_type));
-                            }
-
                         }
                     }
                 }
             }
         }
     }
-    
+
     Ok(GraphResponse { graph, songs })
 }
