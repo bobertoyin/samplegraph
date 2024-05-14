@@ -3,13 +3,12 @@ use std::{
     sync::Arc,
 };
 
-use futures::{stream, StreamExt, TryStreamExt};
+use futures::stream::{self, StreamExt};
 use megamind::models::{RelationshipType, Song};
 use petgraph::graphmap::DiGraphMap;
-use tokio::spawn;
 
-// this value is arbitrary, but we generally want to limit the number of tasks spawned during graph traversal
-const MAX_CONCURRENT: usize = 100;
+// this value is arbitrary, but we generally want to limit the number of concurrent requests during graph traversal
+const MAX_CONCURRENT: usize = 10;
 
 use crate::{error::Error, state::AppState, GraphResponse, SongInfo};
 
@@ -31,20 +30,16 @@ pub async fn build_graph(
     horizon.push_back((root, 0));
 
     while !horizon.is_empty() {
-        let horizon_search = stream::iter(
-            horizon
-                .drain(..)
-                .filter(|(_, degree)| *degree <= degrees)
-                .map(|(id, degree)| {
-                    let state = state.clone();
-                    spawn(async move { (state.song(id).await, degree) })
-                }),
-        )
-        .buffer_unordered(MAX_CONCURRENT)
-        .try_collect::<Vec<(Result<Song, Error>, u8)>>()
-        .await?;
+        let chunk = stream::iter(horizon.drain(..))
+            .map(|(id, degree)| {
+                let state = state.clone();
+                async move { (state.song(id).await, degree) }
+            })
+            .buffer_unordered(MAX_CONCURRENT)
+            .collect::<Vec<(Result<Song, Error>, u8)>>()
+            .await;
 
-        for (song_result, degree) in horizon_search {
+        for (song_result, degree) in chunk {
             let song = song_result?;
 
             if !graph.contains_node(song.core.essential.id) {
