@@ -23,10 +23,7 @@ async fn get_version() -> impl Responder {
 }
 
 #[get("/graph/{song_id}")]
-async fn get_graph(
-    path: Path<u32>,
-    data: Data<AppState>,
-) -> Result<Json<GraphResponse>, Error> {
+async fn get_graph(path: Path<u32>, data: Data<AppState>) -> Result<Json<GraphResponse>, Error> {
     let root = path.into_inner();
     match build_graph(data.into_inner(), root, 2).await {
         Ok(graph) => Ok(Json(graph)),
@@ -60,9 +57,9 @@ async fn main() {
             .service(get_graph)
             .service(get_search);
         let spa_service = spa()
-            .index_file("./client/build/index.html")
+            .index_file("./frontend/dist/index.html")
             .static_resources_mount("/")
-            .static_resources_location("./client/build")
+            .static_resources_location("./frontend/dist")
             .finish();
         App::new()
             .app_data(Data::new(state))
