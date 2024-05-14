@@ -17,7 +17,8 @@ const configs = reactive(
         view: {
             layoutHandler: new ForceLayout({
                 positionFixedByDrag: false,
-                positionFixedByClickWithAltKey: true,
+                positionFixedByClickWithAltKey: false,
+                noAutoRestartSimulation: true,
                 createSimulation: (d3, nodes, edges) => {
                     const forceLink = d3
                         .forceLink<ForceNodeDatum, ForceEdgeDatum>(edges)
@@ -49,8 +50,8 @@ const configs = reactive(
 const { id } = defineProps({ id: { type: String, required: true } });
 
 const loading = ref(false);
-const nodes = reactive<Record<string, { image: String }>>({});
-const edges = reactive<Record<string, { source: String; target: String }>>({});
+const nodes = reactive<Record<string, { name: string; image: string }>>({});
+const edges = reactive<Record<string, { source: string; target: string; label: string }>>({});
 let error = reactive<Error>(new Error());
 
 watch(
@@ -62,14 +63,22 @@ watch(
             const data: GraphResponse = await response.json();
 
             data.graph.nodes.forEach((node) => {
-                nodes[String(node)] = { image: data.songs[node].thumbnail };
+                const song = data.songs[node];
+                nodes[String(node)] = {
+                    image: data.songs[node].thumbnail,
+                    name: song.full_title,
+                };
             });
 
             data.graph.edges.forEach((edge, index) => {
-                const [source_idx, target_idx] = edge;
+                const [source_idx, target_idx, relationship] = edge;
                 const source = data.graph.nodes[source_idx];
                 const target = data.graph.nodes[target_idx];
-                edges[String(index)] = { source: String(source), target: String(target) };
+                edges[String(index)] = {
+                    source: String(source),
+                    target: String(target),
+                    label: relationship.replace("_", " "),
+                };
             });
         } else {
             await error.setFromResponse(response);
@@ -100,31 +109,33 @@ watch(
             </clipPath>
         </defs>
 
+        <template #edge-label="{ edge, ...slotProps }">
+            <v-edge-label
+                :text="edge.label"
+                align="center"
+                vertical-align="above"
+                v-bind="slotProps"
+            />
+        </template>
+
         <!-- Replace the node component -->
         <template #override-node="{ nodeId, scale, config, ...slotProps }">
             <!-- circle for filling background -->
-            <circle
-                class="face-circle"
-                :r="config.radius * scale"
-                fill="#ffffff"
-                v-bind="slotProps"
-            />
+            <circle :r="config.radius * scale" fill="#ffffff" v-bind="slotProps" />
             <!--
         The base position of the <image /> is top left. The node's
         center should be (0,0), so slide it by specifying x and y.
       -->
             <image
-                class="face-picture"
                 :x="-config.radius * scale"
                 :y="-config.radius * scale"
                 :width="config.radius * scale * 2"
                 :height="config.radius * scale * 2"
-                :xlink:href="`${nodes[nodeId].image}`"
+                :xlink:href="nodes[nodeId].image"
                 clip-path="url(#faceCircle)"
             />
             <!-- circle for drawing stroke -->
             <circle
-                class="face-circle"
                 :r="config.radius * scale"
                 fill="none"
                 stroke="#808080"
