@@ -31,11 +31,24 @@
 @import "bulma/bulma.scss";
 
 html {
-    overflow-y: hidden;
+    overflow-y: auto;
+}
+
+a {
+    color: bulma.$warning;
 }
 
 a:hover {
     text-decoration: underline;
+}
+
+#home-div {
+    width: 60vw;
+
+    @media screen and (max-width: 1023px) {
+        // too lazy to get bulma's built-in breakpoints to work
+        width: 90vw;
+    }
 }
 
 #graph-view {
@@ -43,8 +56,19 @@ a:hover {
     height: 100vh;
 }
 
+#search-results {
+    width: inherit;
+    height: 30vh;
+    overflow-y: auto;
+    position: absolute;
+}
+
 .graph {
     width: 100%;
     height: 100%;
     background-color: bulma.$white;
+}
+
+.hit-thumbnail {
+    width: 96px;
 }
