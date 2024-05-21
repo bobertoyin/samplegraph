@@ -44,15 +44,7 @@ pub async fn build_graph(
 
             if !graph.contains_node(song.core.essential.id) {
                 graph.add_node(song.core.essential.id);
-                songs.insert(
-                    song.core.essential.id,
-                    SongInfo {
-                        full_title: song.core.full_title,
-                        url: song.core.essential.url,
-                        degree,
-                        thumbnail: song.core.song_art_image_thumbnail_url,
-                    },
-                );
+                songs.insert(song.core.essential.id, SongInfo::from((&song, degree)));
             }
 
             if degree < degrees {
@@ -63,12 +55,7 @@ pub async fn build_graph(
                                 graph.add_node(neighbor.core.essential.id);
                                 songs.insert(
                                     neighbor.core.essential.id,
-                                    SongInfo {
-                                        full_title: neighbor.core.full_title,
-                                        url: neighbor.core.essential.url,
-                                        degree,
-                                        thumbnail: neighbor.core.song_art_image_thumbnail_url,
-                                    },
+                                    SongInfo::from((&neighbor, degree)),
                                 );
                                 horizon.push_back((neighbor.core.essential.id, degree + 1));
                             }

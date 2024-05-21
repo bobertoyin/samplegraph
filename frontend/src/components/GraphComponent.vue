@@ -66,7 +66,7 @@ watch(
                 const song = data.songs[node];
                 nodes[String(node)] = {
                     image: data.songs[node].thumbnail,
-                    name: song.full_title,
+                    name: `${song.title} by ${song.artist}`,
                 };
             });
 

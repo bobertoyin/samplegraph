@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from "vue";
-import { PhMagnifyingGlass } from "@phosphor-icons/vue";
+import { PhMagnifyingGlass, PhGraph, PhArrowSquareOut } from "@phosphor-icons/vue";
 
 import type { SearchResponse } from "@/bindings/SearchResponse";
 import type { SearchHit } from "@/bindings/SearchHit";
@@ -53,16 +53,34 @@ watch(query, async (query: String) => {
         <div v-if="error.isSet()">
             <ErrorMsg :error="error" />
         </div>
-        <ol v-else-if="hits.length > 0">
-            <li v-for="hit in hits" :key="hit.id">
-                <p>
-                    <RouterLink
-                        class="has-text-warning"
-                        :to="{ name: 'graph', params: { id: hit.id } }"
-                        >{{ hit.full_title }}</RouterLink
-                    >
+        <article v-else-if="hits.length > 0" v-for="hit in hits" :key="hit.id" class="media">
+            <figure class="media-left">
+                <p class="image hit-thumbnail">
+                    <img :src="hit.thumbnail" :alt="hit.title + ' by ' + hit.artist" />
                 </p>
-            </li>
-        </ol>
+            </figure>
+            <div class="media-content">
+                <div class="content">
+                    <p>
+                        <strong>{{ hit.title }}</strong> <small>{{ hit.artist }}</small>
+                    </p>
+                    <p>
+                        <span class="icon-text has-text-warning">
+                            <span class="icon"><PhGraph /></span>
+                            <span
+                                ><RouterLink :to="{ name: 'graph', params: { id: hit.id } }"
+                                    >View Graph</RouterLink
+                                ></span
+                            >
+                        </span>
+                        <br />
+                        <span class="icon-text has-text-warning">
+                            <span class="icon"><PhArrowSquareOut /></span>
+                            <span><a :href="hit.url" target="_blank">View on Genius</a></span>
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </article>
     </div>
 </template>
