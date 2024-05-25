@@ -55,7 +55,7 @@ pub async fn build_graph(
                                 graph.add_node(neighbor.core.essential.id);
                                 songs.insert(
                                     neighbor.core.essential.id,
-                                    SongInfo::from((&neighbor, degree)),
+                                    SongInfo::from((&neighbor, degree + 1)),
                                 );
                                 horizon.push_back((neighbor.core.essential.id, degree + 1));
                             }
