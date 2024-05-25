@@ -10,9 +10,7 @@ COPY frontend .
 RUN npm install
 RUN npm run build
 
-FROM debian:bookworm-slim as release
-RUN apt-get update && apt-get install -y ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
-RUN ulimit -n 4096
+FROM gcr.io/distroless/cc-debian12:latest as release
 WORKDIR /usr/frontend
 COPY --from=node-build /usr/frontend/dist ./dist
 WORKDIR /usr
