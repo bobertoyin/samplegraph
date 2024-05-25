@@ -42,23 +42,37 @@ a:hover {
     text-decoration: underline;
 }
 
+.hero.is-fullheight {
+    min-height: 100svh;
+    height: 100svh;
+}
+
 #home-div {
-    width: 60vw;
+    width: 60svw;
 
     @media screen and (max-width: 1023px) {
         // too lazy to get bulma's built-in breakpoints to work
-        width: 90vw;
+        width: 90svw;
     }
 }
 
 #graph-view {
-    width: 100vw;
-    height: 100vh;
+    width: 100svw;
+    height: 100svh;
+    max-height: 100svh;
+    overflow-y: hidden;
+}
+
+#graph-info {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
 }
 
 #search-results {
     width: inherit;
-    height: 30vh;
+    height: 30svh;
     overflow-y: auto;
     position: absolute;
 }
@@ -66,9 +80,45 @@ a:hover {
 .graph {
     width: 100%;
     height: 100%;
-    background-color: bulma.$white;
 }
 
 .hit-thumbnail {
     width: 96px;
+}
+
+.v-ng-edge {
+    stroke: bulma.$text-weak;
+}
+
+#arrow-marker polygon {
+    fill: bulma.$text-weak;
+}
+
+#arrow-marker-selected polygon {
+    fill: bulma.$warning;
+}
+
+.node-outline,
+.v-ng-node-focusring,
+.v-ng-edge.selected {
+    stroke: bulma.$warning;
+}
+
+.v-ng-edge.selected {
+    marker-end: url("#arrow-marker-selected");
+}
+
+.node-outline.root-node {
+    stroke: bulma.$danger;
+}
+
+#node-tooltip,
+#edge-tooltip {
+    position: absolute;
+    z-index: 2;
+}
+
+#node-tooltip.hidden,
+#edge-tooltip.hidden {
+    display: none;
 }
